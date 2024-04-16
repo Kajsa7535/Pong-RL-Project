@@ -51,10 +51,13 @@ if __name__ == '__main__':
         steps = 0
         while not terminated:
             # TODO: Get action from DQN.
-            action = dqn.act(torch.from_numpy(obs).float().to(device))
+            obs_numpy = obs.cpu().numpy()  # Assuming obs is a PyTorch tensor and it's on CPU
+
+            action = dqn.act(torch.from_numpy(obs_numpy).float().to(device))
+           
 
             # Act in the true environment.
-            obs, reward, terminated, truncated, info = env.step(action)
+            next_obs, reward, terminated, truncated, info = env.step(action)
 
             # Preprocess incoming observation.
             if not terminated:
@@ -75,7 +78,7 @@ if __name__ == '__main__':
             if steps % env_config["target_update_frequency"] == 0:
                 target_dqn.load_state_dict(dqn.state_dict())
 
-
+            obs = next_obs
             # TODO: Update the target network every env_config["target_update_frequency"] steps.
             steps += 1
     
