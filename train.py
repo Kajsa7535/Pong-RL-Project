@@ -29,6 +29,9 @@ if __name__ == '__main__':
 
     # Initialize deep Q-networks.
     dqn = DQN(env_config=env_config).to(device)
+
+    target_dqn = DQN(env_config=env_config).to(device)
+    target_dqn.load_state_dict(dqn.state_dict())
     # TODO: Create and initialize target Q-network.
 
     # Create replay memory.
@@ -45,25 +48,37 @@ if __name__ == '__main__':
         obs, info = env.reset()
 
         obs = preprocess(obs, env=args.env).unsqueeze(0)
-        
+        steps = 0
         while not terminated:
             # TODO: Get action from DQN.
-            action = None
+            action = dqn.act(torch.from_numpy(obs).float().to(device))
 
             # Act in the true environment.
             obs, reward, terminated, truncated, info = env.step(action)
 
             # Preprocess incoming observation.
             if not terminated:
-                obs = preprocess(obs, env=args.env).unsqueeze(0)
+                next_obs = preprocess(obs, env=args.env).unsqueeze(0)
             
             # TODO: Add the transition to the replay memory. Remember to convert
             #       everything to PyTorch tensors!
+            memory.push(torch.from_numpy(obs).float().to(device), 
+                torch.tensor([action]).to(device),  
+                torch.tensor([reward]).float().to(device),
+                torch.from_numpy(next_obs).float().to(device))
+            obs = next_obs
 
             # TODO: Run DQN.optimize() every env_config["train_frequency"] steps.
+            if steps % env_config["train_frequency"] == 0:
+                optimize(dqn, target_dqn, memory, optimizer)
+
+            if steps % env_config["target_update_frequency"] == 0:
+                target_dqn.load_state_dict(dqn.state_dict())
+
 
             # TODO: Update the target network every env_config["target_update_frequency"] steps.
-
+            steps += 1
+    
         # Evaluate the current agent.
         if episode % args.evaluate_freq == 0:
             mean_return = evaluate_policy(dqn, env, env_config, args, n_episodes=args.evaluation_episodes)
