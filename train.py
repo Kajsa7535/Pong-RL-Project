@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
     # Keep track of best evaluation mean return achieved so far.
     best_mean_return = -float("Inf")
-
+    
     for episode in range(env_config['n_episodes']):
         terminated = False
         obs, info = env.reset()
@@ -62,6 +62,8 @@ if __name__ == '__main__':
             # Preprocess incoming observation.
             if not terminated:
                 next_obs = preprocess(obs, env=args.env).unsqueeze(0)
+            else:
+                next_obs = None
             
             # TODO: Add the transition to the replay memory. Remember to convert
             #       everything to PyTorch tensors!
@@ -69,7 +71,8 @@ if __name__ == '__main__':
                 torch.tensor([action]).to(device),  
                 torch.tensor([reward]).float().to(device),
                 torch.from_numpy(next_obs).float().to(device))
-            obs = next_obs
+            
+            obs = next_obs if next_obs is not None else obs
 
             # TODO: Run DQN.optimize() every env_config["train_frequency"] steps.
             if steps % env_config["train_frequency"] == 0:
@@ -80,7 +83,7 @@ if __name__ == '__main__':
 
             obs = next_obs
             # TODO: Update the target network every env_config["target_update_frequency"] steps.
-            steps += 1
+
     
         # Evaluate the current agent.
         if episode % args.evaluate_freq == 0:
