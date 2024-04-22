@@ -36,28 +36,40 @@ if __name__ == '__main__':
 
     # Create replay memory.
     memory = ReplayMemory(env_config['memory_size'])
+    print(memory)
 
     # Initialize optimizer used for training the DQN. We use Adam rather than RMSProp.
     optimizer = torch.optim.Adam(dqn.parameters(), lr=env_config['lr'])
 
     # Keep track of best evaluation mean return achieved so far.
     best_mean_return = -float("Inf")
-    
+    batch_size = env_config['batch_size']
+    #batch_obs = np.zeros((batch_size,4))
+
     for episode in range(env_config['n_episodes']):
         terminated = False
         obs, info = env.reset()
-
+        print(f'before {obs}')
         obs = preprocess(obs, env=args.env).unsqueeze(0)
+        print(f'after {obs}')
         steps = 0
         while not terminated:
             # TODO: Get action from DQN.
-            obs_numpy = obs.cpu().numpy()  # Assuming obs is a PyTorch tensor and it's on CPU
+            obs = obs.cpu()  # Assuming obs is a PyTorch tensor and it's on CPU
+            obs = obs.repeat(batch_size, 1)
 
-            action = dqn.act(torch.from_numpy(obs_numpy).float().to(device))
-           
+            action = dqn.act(obs.to(device))
+            print("Shape:", action.shape)
+
 
             # Act in the true environment.
-            next_obs, reward, terminated, truncated, info = env.step(action)
+            for i in range(batch_size):
+                next_obs, reward, terminated, truncated, info = env.step(action[i].item())
+                if terminated:
+                    next_obs = None
+                    break
+                next_obs = preprocess(next_obs, env=args.env).unsqueeze(0)
+                memory.push(obs[i], action[i], reward, next_obs)
 
             # Preprocess incoming observation.
             if not terminated:
@@ -67,10 +79,7 @@ if __name__ == '__main__':
             
             # TODO: Add the transition to the replay memory. Remember to convert
             #       everything to PyTorch tensors!
-            memory.push(torch.from_numpy(obs).float().to(device), 
-                torch.tensor([action]).to(device),  
-                torch.tensor([reward]).float().to(device),
-                torch.from_numpy(next_obs).float().to(device))
+            
             
             obs = next_obs if next_obs is not None else obs
 

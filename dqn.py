@@ -42,6 +42,7 @@ class DQN(nn.Module):
         self.eps_end = env_config["eps_end"]
         self.anneal_length = env_config["anneal_length"]
         self.n_actions = env_config["n_actions"]
+        self.current_step = 0
 
         self.fc1 = nn.Linear(4, 256)
         self.fc2 = nn.Linear(256, self.n_actions)
@@ -74,6 +75,7 @@ class DQN(nn.Module):
             # TODO: Implement epsilon-greedy exploration.
             """Selects an action with an epsilon-greedy exploration strategy."""
             epsilon = self.epsilon()
+
             if exploit or random.random() > epsilon:
                 with torch.no_grad():
                     return torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
@@ -90,21 +92,35 @@ def optimize(dqn, target_dqn, memory, optimizer):
     # Sample a batch from the replay memory and 
     samples = memory.sample(dqn.batch_size)
     sample_batch = zip(*samples)
-    
+    #print("sample")
+    #obs_batch, action_batch, next_obs, reward = sample_batch
+    #print(obs_batch)
     #concatenate so that there are
     #four tensors in total: observations, actions, next observations and rewards.
-    observations_tensor = torch.cat(sample_batch.obs)
-    action_tensor = torch.cat(sample_batch.action)
-    next_obs_tensor = torch.cat(sample_batch.next_obs) # not getting the terminating states
-   # next_obs_tensor = torch.cat([x for x in sample_batch.next_obs if x is not None]) # not getting the terminating states
-    reward_tensor = torch.cat(sample_batch.reward)
+    #observations_tensor = torch.cat(sample_batch.obs)
+    #action_tensor = torch.cat(sample_batch.action)
+    #next_obs_tensor = torch.cat(sample_batch.next_obs) # not getting the terminating states
+    #next_obs_tensor = torch.cat([x for x in sample_batch.next_obs if x is not None]) # not getting the terminating states
+    #reward_tensor = torch.cat(sample_batch.reward)
+  
+    sample_batch = list(zip(*samples))
+
+    # Extract and convert lists of samples into tensors
+    observations_tensor = torch.cat([s for s in sample_batch[0]]).to(device)
+    action_tensor = torch.cat([s.unsqueeze(0) for s in sample_batch[1]]).to(device)
+    reward_tensor = torch.cat([s.unsqueeze(0) for s in sample_batch[3]]).to(device)
+    
+    # Handling next observations (some might be None)
+    non_terminal_mask = torch.tensor([s is not None for s in sample_batch[2]], device=device, dtype=torch.bool)
+    non_terminal_next_obs = torch.cat([s for s in sample_batch[2] if s is not None]).to(device)
+
 
     #  Remember to move them to GPU if it is available, e.g., by using Tensor.to(device).
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    observations_tensor.to(device)
-    action_tensor.to(device)
-    next_obs_tensor.to(device)
-    reward_tensor.to(device)
+    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #observations_tensor.to(device)
+    #action_tensor.to(device)
+    #next_obs_tensor.to(device)
+    #reward_tensor.to(device)
 
      
     # Compute the current estimates of the Q-values for each state-action
@@ -119,12 +135,21 @@ def optimize(dqn, target_dqn, memory, optimizer):
     #add reward and gamma
 
 
-    q_value_targets = target_dqn(next_obs_tensor).gather(1, action_tensor)
-    q_value_targets = reward_tensor + dqn.gamma * q_value_targets.max(1)[0].unsqueeze()
+    #q_value_targets = target_dqn(next_obs_tensor).gather(1, action_tensor)
+    #q_value_targets = reward_tensor + dqn.gamma * q_value_targets.max(1)[0].unsqueeze()
 
 
     # Compute loss.
-    loss = F.mse_loss(q_values.squeeze(), q_value_targets)
+    #loss = F.mse_loss(q_values.squeeze(), q_value_targets)
+
+    next_q_values = torch.zeros(dqn.batch_size, device=device)
+    next_q_values[non_terminal_mask] = target_dqn(non_terminal_next_obs).max(1)[0].detach()
+    
+    # Compute the expected Q values
+    expected_q_values = reward_tensor + (dqn.gamma * next_q_values.unsqueeze(1))
+    
+    # Compute loss using Mean Squared Error
+    loss = F.mse_loss(q_values, expected_q_values)
 
     # Perform gradient descent.
     optimizer.zero_grad()
