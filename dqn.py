@@ -19,8 +19,14 @@ class ReplayMemory:
         if len(self.memory) < self.capacity:
             self.memory.append(None)
 
+         # Store None as it is, or convert to tensor as needed
+        #self.memory[self.position] = (obs, action, next_obs if next_obs is None else torch.tensor(next_obs, device=device), reward)
         self.memory[self.position] = (obs, action, next_obs, reward)
         self.position = (self.position + 1) % self.capacity
+
+
+
+
 
     def sample(self, batch_size):
         """
@@ -52,8 +58,6 @@ class DQN(nn.Module):
 
     def forward(self, x):
         """Runs the forward pass of the NN depending on architecture."""
-        if(x == None):
-            return 0 #return 0 for terminating states
         x = self.relu(self.fc1(x))
         x = self.fc2(x)
 
@@ -67,89 +71,92 @@ class DQN(nn.Module):
                 eps = max(self.eps_end, self.eps_start - (self.eps_start - self.eps_end) * self.current_step / self.anneal_length)
                 return eps
 
-    def act(self, observation, exploit=False):
-            # TODO: Implement action selection using the Deep Q-network. This function
-            #       takes an observation tensor and should return a tensor of actions.
-            #       For example, if the state dimension is 4 and the batch size is 32,
-            #       the input would be a [32, 4] tensor and the output a [32, 1] tensor.
-            # TODO: Implement epsilon-greedy exploration.
-            """Selects an action with an epsilon-greedy exploration strategy."""
-            epsilon = self.epsilon()
 
-            if exploit or random.random() > epsilon:
-                with torch.no_grad():
-                    return torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
-            else:
-                return torch.randint(0, self.n_actions, (observation.size(0), 1))
-    
+    def act(self, observation, exploit=False):
+        """Selects an action with an epsilon-greedy exploration strategy."""
+        # DONE: Implement action selection using the Deep Q-network. This function
+        #       takes an observation tensor and should return a tensor of actions.
+        #       For example, if the state dimension is 4 and the batch size is 32,
+        #       the input would be a [32, 4] tensor and the output a [32, 1] tensor.
+
+        # DONE: Implement epsilon-greedy exploration.1
+        random_number = random.uniform(0, 1)
+        epsilon = self.epsilon()
+
+
+        if exploit or random_number > epsilon:
+            with torch.no_grad():
+                actions =  torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
+        else:
+            actions =  torch.randint(0, self.n_actions, (observation.size(0), 1), device=device)
+        self.current_step += 1
+        return actions
 
 def optimize(dqn, target_dqn, memory, optimizer):
     """This function samples a batch from the replay buffer and optimizes the Q-network."""
     # If we don't have enough transitions stored yet, we don't train.
     if len(memory) < dqn.batch_size:
         return
+   # print("IN OPTIMIZE")
 
-    # Sample a batch from the replay memory and 
-    samples = memory.sample(dqn.batch_size)
-    sample_batch = zip(*samples)
-    #print("sample")
-    #obs_batch, action_batch, next_obs, reward = sample_batch
-    #print(obs_batch)
-    #concatenate so that there are
-    #four tensors in total: observations, actions, next observations and rewards.
-    #observations_tensor = torch.cat(sample_batch.obs)
-    #action_tensor = torch.cat(sample_batch.action)
-    #next_obs_tensor = torch.cat(sample_batch.next_obs) # not getting the terminating states
-    #next_obs_tensor = torch.cat([x for x in sample_batch.next_obs if x is not None]) # not getting the terminating states
-    #reward_tensor = torch.cat(sample_batch.reward)
-  
-    sample_batch = list(zip(*samples))
-
-    # Extract and convert lists of samples into tensors
-    observations_tensor = torch.cat([s for s in sample_batch[0]]).to(device)
-    action_tensor = torch.cat([s.unsqueeze(0) for s in sample_batch[1]]).to(device)
-    reward_tensor = torch.cat([s.unsqueeze(0) for s in sample_batch[3]]).to(device)
-    
-    # Handling next observations (some might be None)
-    non_terminal_mask = torch.tensor([s is not None for s in sample_batch[2]], device=device, dtype=torch.bool)
-    non_terminal_next_obs = torch.cat([s for s in sample_batch[2] if s is not None]).to(device)
+        # DONE: Sample a batch from the replay memory and concatenate so that there are
+    #       four tensors in total: observations, actions, next observations and rewards.
+    #       Remember to move them to GPU if it is available, e.g., by using Tensor.to(device).
+    #       TODO: Note that special care is needed for terminal transitions!
 
 
-    #  Remember to move them to GPU if it is available, e.g., by using Tensor.to(device).
-    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #observations_tensor.to(device)
-    #action_tensor.to(device)
-    #next_obs_tensor.to(device)
-    #reward_tensor.to(device)
+    # Sample a batch from the replay memory and convert to tensor
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    transitions = memory.sample(dqn.batch_size)
+    states, actions, next_states, rewards = transitions
+   # print("next states", next_states)
+    # Iterate over the elements of next_state
+    # Get the shape of a non-None tensor in next_state
 
-     
-    # Compute the current estimates of the Q-values for each state-action
+
+    next_state_with_zeros = tuple(tensor if tensor is not None else torch.zeros(1,1, 4) for tensor in next_states)
+   # print("next state with zeros", next_state_with_zeros)
+
+   # print("zero index", zero_index)
+    states = torch.stack(states).to(device)
+    actions = torch.stack(actions).to(device)
+    next_states = torch.stack(next_state_with_zeros).to(device)
+    rewards = torch.stack(rewards).to(device)
+    states = states.squeeze(1)
+    actions = actions.squeeze(1)
+
+
+    # TODO: Compute the current estimates of the Q-values for each state-action
     #       pair (s,a). Here, torch.gather() is useful for selecting the Q-values
     #       corresponding to the chosen actions.
-    q_values = dqn(observations_tensor).gather(1, action_tensor)
-    
-   
+
     # TODO: Compute the Q-value targets. Only do this for non-terminal transitions!
     # if terminating : only reward 
     # else r + gamme * max q value
-    #add reward and gamma
+    # add reward and gamma
+
+    # TODO: Compute the Q-value targets. Only do this for non-terminal transitions!
 
 
-    #q_value_targets = target_dqn(next_obs_tensor).gather(1, action_tensor)
-    #q_value_targets = reward_tensor + dqn.gamma * q_value_targets.max(1)[0].unsqueeze()
-
-
-    # Compute loss.
-    #loss = F.mse_loss(q_values.squeeze(), q_value_targets)
-
+    # Handling next observations (taking care of None values for terminal states)
+    non_final_mask = torch.tensor([s is not None for sublist in next_state_with_zeros for s in sublist], device=device, dtype=torch.bool)
+    non_final_next_states = torch.cat([s for sublist in next_state_with_zeros for s in sublist if s is not None]).to(device)
+    
+    # Compute Q-values for current states and actions
     next_q_values = torch.zeros(dqn.batch_size, device=device)
-    next_q_values[non_terminal_mask] = target_dqn(non_terminal_next_obs).max(1)[0].detach()
+    current_q_values = dqn(states).gather(1, actions)
+    with torch.no_grad():
+        next_q_values[non_final_mask] = target_dqn(non_final_next_states).max(1)[0].detach()
     
-    # Compute the expected Q values
-    expected_q_values = reward_tensor + (dqn.gamma * next_q_values.unsqueeze(1))
+    # Compute next Q-values from target network only for non-final states
+    # Compute the expected Q values (targets)
+    expected_q_values = (next_q_values * dqn.gamma) + rewards
     
-    # Compute loss using Mean Squared Error
-    loss = F.mse_loss(q_values, expected_q_values)
+    # Compute loss.
+    #loss = F.mse_loss(current_q_values, expected_q_values)
+    # Compute loss.
+    loss = F.mse_loss(current_q_values.squeeze(), expected_q_values)
+
 
     # Perform gradient descent.
     optimizer.zero_grad()
@@ -158,4 +165,5 @@ def optimize(dqn, target_dqn, memory, optimizer):
     optimizer.step()
 
     return loss.item()
+
 
