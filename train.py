@@ -34,8 +34,6 @@ if __name__ == '__main__':
     dqn = DQN(env_config=env_config).to(device)
     target_dqn = DQN(env_config=env_config).to(device) #duplicate network for target network
     target_dqn.load_state_dict(dqn.state_dict()) # Initialize target network with the same weights as the DQN.
-    # DONE: Create and initialize target Q-network.
-    
 
     # Create replay memory.
     memory = ReplayMemory(env_config['memory_size'])
@@ -70,9 +68,8 @@ if __name__ == '__main__':
                 next_obs = preprocess(next_obs, env=args.env).unsqueeze(0)
             else:
                 next_obs = None
-            # DONE: Add the transition to the replay memory. Remember to convert
-            #       everything to PyTorch tensors!
-            
+
+           # Add the transition to the replay memory.      
             if next_obs is not None:
                 torch_next_obs = torch.tensor(next_obs, device=device)
             else:

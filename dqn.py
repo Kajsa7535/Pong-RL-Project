@@ -83,15 +83,12 @@ class DQN(nn.Module):
         random_number = random.uniform(0, 1)
         epsilon = self.epsilon()
     
-
-
         if exploit or random_number > epsilon:
             if exploit:
                 with torch.no_grad():
                     actions =  torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
             else:
                 actions =  torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
-                #print(actions)
         else:
             actions =  torch.randint(0, self.n_actions, (observation.size(0), 1), device=device)
         return actions
@@ -101,70 +98,32 @@ def optimize(dqn, target_dqn, memory, optimizer):
     # If we don't have enough transitions stored yet, we don't train.
     if len(memory) < dqn.batch_size:
         return
-   # print("IN OPTIMIZE")
-
-        # DONE: Sample a batch from the replay memory and concatenate so that there are
-    #       four tensors in total: observations, actions, next observations and rewards.
-    #       Remember to move them to GPU if it is available, e.g., by using Tensor.to(device).
-    #       TODO: Note that special care is needed for terminal transitions!
-
 
     # Sample a batch from the replay memory and convert to tensor
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     transitions = memory.sample(dqn.batch_size)
     states, actions, next_states, rewards = transitions
-   # print("next states", next_states)
+
     # Iterate over the elements of next_state
     # Get the shape of a non-None tensor in next_state
-
     non_final_mask = torch.tensor([s is not None for s in next_states], device=device, dtype=torch.bool)
-    #print(non_final_mask)
     non_final_next_states = torch.stack([s for s in next_states if s is not None]).to(device)
 
     next_state_with_zeros = tuple(tensor if tensor is not None else torch.zeros(1, 4) for tensor in next_states)
-   # print("next state with zeros", next_state_with_zeros)
-   # print("zero index", zero_index)
     next_states = torch.stack(next_state_with_zeros).to(device)
-    states = torch.stack(states).to(device)
-    actions = torch.stack(actions).to(device)
-    states = states.squeeze(1)  
-    actions = actions.squeeze(1)
+    states = torch.stack(states).to(device).squeeze(1)  
+    actions = torch.stack(actions).to(device).squeeze(1)  
     rewards = torch.stack(rewards).to(device)
-
-
-    # TODO: Compute the current estimates of the Q-values for each state-action
-    #       pair (s,a). Here, torch.gather() is useful for selecting the Q-values
-    #       corresponding to the chosen actions.
-
-    # TODO: Compute the Q-value targets. Only do this for non-terminal transitions!
-    # if terminating : only reward 
-    # else r + gamme * max q value
-    # add reward and gamma
-
-    # TODO: Compute the Q-value targets. Only do this for non-terminal transitions!
-
-
-    # Handling next observations (taking care of None values for terminal states)
-    
-
     
     # Compute Q-values for current states and actions
     next_q_values = torch.zeros((dqn.batch_size, 1), device=device)
     current_q_values = dqn(states).gather(1, actions)
-    #print("target_dqn", target_dqn(non_final_next_states).shape)
-    #print("targetdqn", target_dqn(non_final_next_states).max(-1)[0].detach().shape)
-
-    #print("next_q_values", next_q_values[non_final_mask].shape)
     next_q_values[non_final_mask] = target_dqn(non_final_next_states).max(-1)[0].detach()
-    #print("next_q_values_0s", next_q_values[~non_final_mask])
-    
-    #print("next_q_values", next_q_values.shape)
-    # Compute next Q-values from target network only for non-final states
+
     # Compute the expected Q values (targets)
     expected_q_values = (next_q_values.squeeze(-1) * dqn.gamma) + rewards
 
-    # Compute loss.
-    #loss = F.mse_loss(current_q_values, expected_q_values)
     # Compute loss.
     loss = F.mse_loss(current_q_values, expected_q_values.unsqueeze(-1))
 
@@ -173,7 +132,6 @@ def optimize(dqn, target_dqn, memory, optimizer):
 
     loss.backward()
     optimizer.step()
-    #print("LOSS", loss.item())
     return loss.item()
 
 
