@@ -31,9 +31,10 @@ def evaluate_policy(dqn, env, env_config, args, n_episodes, render=False, verbos
         obs = preprocess(obs, env=args.env).unsqueeze(0)
 
         terminated = False
+        truncated = False
         episode_return = 0
 
-        while not terminated:
+        while not terminated and not truncated:
             if render:
                 env.render()
 

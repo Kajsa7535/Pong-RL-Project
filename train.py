@@ -45,32 +45,34 @@ if __name__ == '__main__':
 
     # Keep track of best evaluation mean return achieved so far.
     best_mean_return = -float("Inf")
-
+    step = 0
     for episode in range(env_config['n_episodes']):
         terminated = False
         obs, info = env.reset()
-
-        obs = preprocess(obs, env=args.env).unsqueeze(0)
-
         
         while not terminated:
+            step+=1
+            dqn.current_step += 1
             # DONE: Get action from DQN.
+            obs = preprocess(obs, env=args.env).unsqueeze(0)
+
             action = dqn.act(obs)
 
             # Act in the true environment.
             action_item = action.item() #TODO WILL THIS WORK WITH LARGER BATCH SIZE?
             next_obs, reward, terminated, truncated, info = env.step(action_item) 
 
+            torch_obs = torch.tensor(obs)
+            obs = next_obs
+
             # Preprocess incoming observation.
             if not terminated:
-                next_obs = preprocess(obs, env=args.env).unsqueeze(0)
+                next_obs = preprocess(next_obs, env=args.env).unsqueeze(0)
             else:
                 next_obs = None
-            
             # DONE: Add the transition to the replay memory. Remember to convert
             #       everything to PyTorch tensors!
             
-            torch_obs = torch.tensor(obs)
             if next_obs is not None:
                 torch_next_obs = torch.tensor(next_obs, device=device)
             else:
@@ -79,16 +81,12 @@ if __name__ == '__main__':
             torch_reward = torch.tensor(reward)
             memory.push(torch_obs, torch_action, torch_next_obs, torch_reward)
 
-            
-
-
-
             # DONE: Run DQN.optimize() every env_config["train_frequency"] steps.
-            if episode % env_config["train_frequency"] == 0:
+            if step % env_config["train_frequency"] == 0:
                 optimize(dqn, target_dqn, memory, optimizer)
 
             # DONE: Update the target network every env_config["target_update_frequency"] steps.
-            if episode % env_config["target_update_frequency"] == 0:
+            if step % env_config["target_update_frequency"] == 0:
                 target_dqn.load_state_dict(dqn.state_dict())
 
         # Evaluate the current agent.

@@ -82,14 +82,18 @@ class DQN(nn.Module):
         # DONE: Implement epsilon-greedy exploration.1
         random_number = random.uniform(0, 1)
         epsilon = self.epsilon()
+    
 
 
         if exploit or random_number > epsilon:
-            with torch.no_grad():
+            if exploit:
+                with torch.no_grad():
+                    actions =  torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
+            else:
                 actions =  torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
+                #print(actions)
         else:
             actions =  torch.randint(0, self.n_actions, (observation.size(0), 1), device=device)
-        self.current_step += 1
         return actions
 
 def optimize(dqn, target_dqn, memory, optimizer):
@@ -113,17 +117,19 @@ def optimize(dqn, target_dqn, memory, optimizer):
     # Iterate over the elements of next_state
     # Get the shape of a non-None tensor in next_state
 
+    non_final_mask = torch.tensor([s is not None for s in next_states], device=device, dtype=torch.bool)
+    #print(non_final_mask)
+    non_final_next_states = torch.stack([s for s in next_states if s is not None]).to(device)
 
-    next_state_with_zeros = tuple(tensor if tensor is not None else torch.zeros(1,1, 4) for tensor in next_states)
+    next_state_with_zeros = tuple(tensor if tensor is not None else torch.zeros(1, 4) for tensor in next_states)
    # print("next state with zeros", next_state_with_zeros)
-
    # print("zero index", zero_index)
+    next_states = torch.stack(next_state_with_zeros).to(device)
     states = torch.stack(states).to(device)
     actions = torch.stack(actions).to(device)
-    next_states = torch.stack(next_state_with_zeros).to(device)
-    rewards = torch.stack(rewards).to(device)
-    states = states.squeeze(1)
+    states = states.squeeze(1)  
     actions = actions.squeeze(1)
+    rewards = torch.stack(rewards).to(device)
 
 
     # TODO: Compute the current estimates of the Q-values for each state-action
@@ -139,31 +145,35 @@ def optimize(dqn, target_dqn, memory, optimizer):
 
 
     # Handling next observations (taking care of None values for terminal states)
-    non_final_mask = torch.tensor([s is not None for sublist in next_state_with_zeros for s in sublist], device=device, dtype=torch.bool)
-    non_final_next_states = torch.cat([s for sublist in next_state_with_zeros for s in sublist if s is not None]).to(device)
+    
+
     
     # Compute Q-values for current states and actions
-    next_q_values = torch.zeros(dqn.batch_size, device=device)
+    next_q_values = torch.zeros((dqn.batch_size, 1), device=device)
     current_q_values = dqn(states).gather(1, actions)
-    with torch.no_grad():
-        next_q_values[non_final_mask] = target_dqn(non_final_next_states).max(1)[0].detach()
+    #print("target_dqn", target_dqn(non_final_next_states).shape)
+    #print("targetdqn", target_dqn(non_final_next_states).max(-1)[0].detach().shape)
+
+    #print("next_q_values", next_q_values[non_final_mask].shape)
+    next_q_values[non_final_mask] = target_dqn(non_final_next_states).max(-1)[0].detach()
+    #print("next_q_values_0s", next_q_values[~non_final_mask])
     
+    #print("next_q_values", next_q_values.shape)
     # Compute next Q-values from target network only for non-final states
     # Compute the expected Q values (targets)
-    expected_q_values = (next_q_values * dqn.gamma) + rewards
-    
+    expected_q_values = (next_q_values.squeeze(-1) * dqn.gamma) + rewards
+
     # Compute loss.
     #loss = F.mse_loss(current_q_values, expected_q_values)
     # Compute loss.
-    loss = F.mse_loss(current_q_values.squeeze(), expected_q_values)
-
+    loss = F.mse_loss(current_q_values, expected_q_values.unsqueeze(-1))
 
     # Perform gradient descent.
     optimizer.zero_grad()
 
     loss.backward()
     optimizer.step()
-
+    #print("LOSS", loss.item())
     return loss.item()
 
 
