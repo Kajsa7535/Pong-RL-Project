@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -50,14 +51,21 @@ class DQN(nn.Module):
         self.n_actions = env_config["n_actions"]
         self.current_step = 0
 
-        self.fc1 = nn.Linear(4, 256)
-        self.fc2 = nn.Linear(256, self.n_actions)
+        self.conv1 = nn.Conv2d(4, 32, kernel_size=8, stride=4, padding=0)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0)
+        self.fc1 = nn.Linear(3136, 512)
+        self.fc2 = nn.Linear(512, self.n_actions)
 
         self.relu = nn.ReLU()
         self.flatten = nn.Flatten()
 
     def forward(self, x):
         """Runs the forward pass of the NN depending on architecture."""
+        x = self.relu(self.conv1(x))
+        x = self.relu(self.conv2(x))
+        x = self.relu(self.conv3(x))
+        x = self.flatten(x)
         x = self.relu(self.fc1(x))
         x = self.fc2(x)
 
@@ -79,7 +87,15 @@ class DQN(nn.Module):
         #       For example, if the state dimension is 4 and the batch size is 32,
         #       the input would be a [32, 4] tensor and the output a [32, 1] tensor.
 
-        # DONE: Implement epsilon-greedy exploration.1
+        # DONE: Implement epsilon-greedy exploration.1 TODO: Är detta verkligen så man gör???
+
+
+        if len(observation.shape) == 3:
+            observation = observation.unsqueeze(0)  # Add batch dimension
+
+        if observation.size(1) == 1:
+            observation = observation.repeat(1, 4, 1, 1)  # Repeat the channel dimension to make it 4
+        
         random_number = random.uniform(0, 1)
         epsilon = self.epsilon()
     
@@ -87,10 +103,17 @@ class DQN(nn.Module):
             if exploit:
                 with torch.no_grad():
                     actions =  torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
+                
             else:
+ 
                 actions =  torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
         else:
             actions =  torch.randint(0, self.n_actions, (observation.size(0), 1), device=device)
+
+        # actions_mapped = actions.clone()
+        # actions_mapped[actions == 0] = 2
+        # actions_mapped[actions == 1] = 3
+        # print("ACTIONS MAPPED:", actions_mapped)
         return actions
 
 def optimize(dqn, target_dqn, memory, optimizer):
@@ -104,11 +127,11 @@ def optimize(dqn, target_dqn, memory, optimizer):
 
     transitions = memory.sample(dqn.batch_size)
     states, actions, next_states, rewards = transitions
-
     # Iterate over the elements of next_state
     # Get the shape of a non-None tensor in next_state
     non_final_mask = torch.tensor([s is not None for s in next_states], device=device, dtype=torch.bool)
-    non_final_next_states = torch.stack([s for s in next_states if s is not None]).to(device)
+    non_final_next_states = torch.stack([s for s in next_states if s is not None])
+    non_final_next_states = non_final_next_states.squeeze(1).to(device)
 
     next_state_with_zeros = tuple(tensor if tensor is not None else torch.zeros(1, 4) for tensor in next_states)
     next_states = torch.stack(next_state_with_zeros).to(device)
@@ -119,7 +142,9 @@ def optimize(dqn, target_dqn, memory, optimizer):
     # Compute Q-values for current states and actions
     next_q_values = torch.zeros((dqn.batch_size, 1), device=device)
     current_q_values = dqn(states).gather(1, actions)
-    next_q_values[non_final_mask] = target_dqn(non_final_next_states).max(-1)[0].detach()
+   
+    next_q_values[non_final_mask] = target_dqn(non_final_next_states).max(-1)[0].unsqueeze(1).detach()
+
 
     # Compute the expected Q values (targets)
     expected_q_values = (next_q_values.squeeze(-1) * dqn.gamma) + rewards

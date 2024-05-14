@@ -1,0 +1,1 @@
+{"episodes": [1], "returns": [-21.0], "observation_stack_size": 4, "memory_size": 10000, "batch_size": 32, "target_update_frequency": 1000, "train_frequency": 4, "gamma": 0.99, "lr": 0.0001, "eps_start": 1.0, "eps_end": 0.01, "anneal_length": 1000000, "n_actions": 2}
