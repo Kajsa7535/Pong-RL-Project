@@ -90,12 +90,7 @@ class DQN(nn.Module):
         # DONE: Implement epsilon-greedy exploration.1 TODO: Är detta verkligen så man gör???
 
 
-        if len(observation.shape) == 3:
-            observation = observation.unsqueeze(0)  # Add batch dimension
-
-        if observation.size(1) == 1:
-            observation = observation.repeat(1, 4, 1, 1)  # Repeat the channel dimension to make it 4
-        
+       
         random_number = random.uniform(0, 1)
         epsilon = self.epsilon()
     
@@ -110,10 +105,7 @@ class DQN(nn.Module):
         else:
             actions =  torch.randint(0, self.n_actions, (observation.size(0), 1), device=device)
 
-        # actions_mapped = actions.clone()
-        # actions_mapped[actions == 0] = 2
-        # actions_mapped[actions == 1] = 3
-        # print("ACTIONS MAPPED:", actions_mapped)
+       
         return actions
 
 def optimize(dqn, target_dqn, memory, optimizer):

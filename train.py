@@ -11,9 +11,14 @@ from dqn import DQN, ReplayMemory, optimize
 from gymnasium.wrappers import AtariPreprocessing
 
 
-NUM_RUN = 10
+NUM_RUN = "first_run_atari"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
+if device.type == 'cuda':
+    print(f"CUDA is available. GPU device name: {torch.cuda.get_device_name(0)}")
+else:
+    print("CUDA is not available. Using CPU.")
 parser = argparse.ArgumentParser()
 parser.add_argument('--env', choices=['ALE/Pong-v5'], default='ALE/Pong-v5')
 parser.add_argument('--evaluate_freq', type=int, default=25, help='How often to run evaluation.', nargs='?')
@@ -70,15 +75,21 @@ if __name__ == '__main__':
         obs, info = env.reset()
 
         obs = preprocess(obs, env=args.env).unsqueeze(0)
+      
 
         obs_stack = torch.cat(obs_stack_size * [obs]).unsqueeze(0).to(device)
+   
         
         while not terminated:
             step += 1
             dqn.current_step += 1
-            
-            action = dqn.act(obs_stack)
+         
+            action = dqn.act(obs_stack) 
+         
             action_item = action.item()
+            action_item +=2
+         
+
             next_obs, reward, terminated, truncated, info = env.step(action_item)
             #make next obs to tensor
             next_obs = preprocess(next_obs, env=args.env).unsqueeze(0)

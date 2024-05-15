@@ -33,7 +33,7 @@ n_actions: The number of actions can easily be accessed with env.action_space.n,
 # Hyperparameters for Atari pong
 Pong = {
     'observation_stack_size': 4,
-    'n_episodes': 20,
+    'n_episodes': 1000,
     'replay_memory_capacity': 10000,
     'batch_size': 32,
     'target_update_frequency': 1000,

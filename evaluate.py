@@ -23,13 +23,17 @@ ENV_CONFIGS = {
 }
 
 
+
 def evaluate_policy(dqn, env, env_config, args, n_episodes, render=False, verbose=False):
+
+    env_config = ENV_CONFIGS[args.env]
+    obs_stack_size = env_config['observation_stack_size']
     """Runs {n_episodes} episodes to evaluate current policy."""
     total_return = 0
     for i in range(n_episodes):
         obs, info = env.reset()
         obs = preprocess(obs, env=args.env).unsqueeze(0)
-
+        obs_stack = torch.cat(obs_stack_size* [obs]).unsqueeze(0).to(device)
         terminated = False
         truncated = False
         episode_return = 0
@@ -37,11 +41,14 @@ def evaluate_policy(dqn, env, env_config, args, n_episodes, render=False, verbos
         while not terminated and not truncated:
             if render:
                 env.render()
-
-            action = dqn.act(obs, exploit=True).item()
+            action = dqn.act(obs_stack, exploit=True).item()
+            action += 2
+      
+           
             obs, reward, terminated, truncated, info = env.step(action)
             obs = preprocess(obs, env=args.env).unsqueeze(0)
-
+            obs_stack = torch.cat(obs_stack_size * [obs]).unsqueeze(0).to(device)
+    
             episode_return += reward
         
         total_return += episode_return
