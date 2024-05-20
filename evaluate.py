@@ -2,7 +2,7 @@ import argparse
 
 import gymnasium as gym
 import torch
-
+from gymnasium.wrappers import AtariPreprocessing
 import config
 from utils import preprocess
 
@@ -32,7 +32,7 @@ def evaluate_policy(dqn, env, env_config, args, n_episodes, render=False, verbos
     total_return = 0
     for i in range(n_episodes):
         obs, info = env.reset()
-        obs = preprocess(obs, env=args.env).unsqueeze(0)
+        obs = preprocess(obs, env=args.env).unsqueeze(0).to(device)
         obs_stack = torch.cat(obs_stack_size* [obs]).unsqueeze(0).to(device)
         terminated = False
         truncated = False
@@ -46,7 +46,7 @@ def evaluate_policy(dqn, env, env_config, args, n_episodes, render=False, verbos
       
            
             obs, reward, terminated, truncated, info = env.step(action)
-            obs = preprocess(obs, env=args.env).unsqueeze(0)
+            obs = preprocess(obs, env=args.env).unsqueeze(0).to(device)
             obs_stack = torch.cat(obs_stack_size * [obs]).unsqueeze(0).to(device)
     
             episode_return += reward
@@ -64,14 +64,17 @@ if __name__ == '__main__':
 
     # Initialize environment and config
     env = gym.make(args.env)
+    env = AtariPreprocessing(env, screen_size=84, grayscale_obs=True, frame_skip=1, noop_max=30)
     env_config = ENV_CONFIGS[args.env]
 
     if args.save_video:
         env = gym.make(args.env, render_mode='rgb_array')
+        env = AtariPreprocessing(env, screen_size=84, grayscale_obs=True, frame_skip=1, noop_max=30)
         env = gym.wrappers.RecordVideo(env, './video/', episode_trigger=lambda episode_id: True)
 
     # Load model from provided path.
     dqn = torch.load(args.path, map_location=torch.device('cpu'))
+    dqn.to(device)
     dqn.eval()
 
     mean_return = evaluate_policy(dqn, env, env_config, args, args.n_eval_episodes, render=args.render and not args.save_video, verbose=True)

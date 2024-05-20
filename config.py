@@ -33,8 +33,8 @@ n_actions: The number of actions can easily be accessed with env.action_space.n,
 # Hyperparameters for Atari pong
 Pong = {
     'observation_stack_size': 4,
-    'n_episodes': 1000,
-    'replay_memory_capacity': 10000,
+    'n_episodes': 5000,
+    'replay_memory_capacity': 30000,
     'batch_size': 32,
     'target_update_frequency': 1000,
     'train_frequency': 4,
@@ -42,6 +42,7 @@ Pong = {
     'lr': 1e-4,
     'eps_start': 1.0,
     'eps_end': 0.01,
-    'anneal_length': 10**6,
-    'n_actions': 2
+    'anneal_length': 10**6 ,
+    'n_actions': 2,
+    'learning_start': 10000,
 }

@@ -2,6 +2,7 @@ import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -89,14 +90,15 @@ class DQN(nn.Module):
 
         # DONE: Implement epsilon-greedy exploration.1 TODO: Är detta verkligen så man gör???
 
-
        
         random_number = random.uniform(0, 1)
         epsilon = self.epsilon()
+
     
         if exploit or random_number > epsilon:
             if exploit:
                 with torch.no_grad():
+
                     actions =  torch.argmax(self.forward(observation), dim=1).unsqueeze(1)
                 
             else:
@@ -105,7 +107,7 @@ class DQN(nn.Module):
         else:
             actions =  torch.randint(0, self.n_actions, (observation.size(0), 1), device=device)
 
-       
+        
         return actions
 
 def optimize(dqn, target_dqn, memory, optimizer):
@@ -129,20 +131,22 @@ def optimize(dqn, target_dqn, memory, optimizer):
     next_states = torch.stack(next_state_with_zeros).to(device)
     states = torch.stack(states).to(device).squeeze(1)  
     actions = torch.stack(actions).to(device).squeeze(1)  
-    rewards = torch.stack(rewards).to(device)
+    rewards = torch.stack(rewards).to(device).squeeze(1)
     
     # Compute Q-values for current states and actions
     next_q_values = torch.zeros((dqn.batch_size, 1), device=device)
     current_q_values = dqn(states).gather(1, actions)
-   
     next_q_values[non_final_mask] = target_dqn(non_final_next_states).max(-1)[0].unsqueeze(1).detach()
 
+   
 
     # Compute the expected Q values (targets)
-    expected_q_values = (next_q_values.squeeze(-1) * dqn.gamma) + rewards
-
+ 
+    expected_q_values = (next_q_values.squeeze(1) * dqn.gamma) + rewards
     # Compute loss.
-    loss = F.mse_loss(current_q_values, expected_q_values.unsqueeze(-1))
+
+    loss = F.mse_loss(current_q_values.squeeze(1), expected_q_values)
+    
 
     # Perform gradient descent.
     optimizer.zero_grad()
